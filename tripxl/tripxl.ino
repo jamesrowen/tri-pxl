@@ -8,31 +8,22 @@ const uint8_t BASE_OFFSET = 0; // 0
 const uint8_t ROW_SIZES[] = { 15, 27, 39 }; // { 12, 24, 36, 48, 60, 72 }
 const uint8_t NUM_PATTERNS = 6;
 
-uint8_t colorMode = 0;
-uint32_t mainColor = 0x336699;
-uint32_t colorList[] = { 0x3300cc, 0x66cc00, 0xcc6600, 0x990066, 0xcc0033, 0x00cc66, 0x11ff11 };
-const uint8_t COLOR_LIST_LENGTH = 7;
-
-// connections: 
-// green data wire from pixel         -> pin 6 on arduino
-// white wire next to green on pixel  -> ground on psu
-// pink wire from pixel               -> power on psu
-// white wire next to pink from pixel -> neutral on psu (in testing it worked on -V, not the actual neutral from the wall)
-// VIN and ground on arduino          -> power and ground on psu
-
-const int PIXEL_PIN = 6;
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_PIXELS, PIXEL_PIN, NEO_GRB + NEO_KHZ800);
-
 Row* rows[NUM_ROWS];
 Pattern* patterns[NUM_PATTERNS];
 Loop animation;
 bool animationIsPlaying = true;
+
+uint8_t colorMode = 0;
+
+const int PIXEL_PIN = 6;
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_PIXELS, PIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
 long currentTime = 0;
 long elapsedTime = 0;
 
 void setup() {
   Serial.begin(9600);
+  Serial.println("ack");
   strip.begin();
   strip.show();
 
@@ -48,38 +39,57 @@ void setup() {
   patterns[3] = new Pattern(.1, 4, radiate);
   patterns[4] = new Pattern(.4, 1, fillAllRows);
   patterns[5] = new Pattern(.5, 2, spinner);
+
+  // starting animation
+  animation = Loop(patterns[2], 1, 0, .05, .05, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
   
   strip.show();
-
-//  Serial.println("get");
-//  delay(200);
-//  Serial.println("get");
-  animation = Loop(patterns[5],  3,   1,   .5,   .5,    6,   6, 1, 9, 0, 0, 0, 0, 0, 0);
 }
 
 void loop() {
   if (Serial.available() > 0) {
-    animationIsPlaying = true;
-    animation.pattern = patterns[readI()];
-    animation.iterations = readI();
-    animation.doReverse = readB();
-    animation.speedStart = readF();
-    animation.speedEnd = readF();
-    animation.p1s = readF();
-    animation.p1e = readF();
-    animation.p2s = readF();
-    animation.p2e = readF();
-    animation.p3s = readF();
-    animation.p3e = readF();
-    animation.p4s = readF();
-    animation.p4e = readF();
-    animation.p5s = readF();
-    animation.p5e = readF();
+    int marker = Serial.parseInt();
+    // process action
+    if (marker < 0) {
+      Serial.read();
+      String action = Serial.readStringUntil(' ');
+      int p1 = Serial.parseInt();
+      int p2 = Serial.parseInt();
+      int p3 = Serial.parseInt();
+      int p4 = Serial.parseInt();
+      doAction(action, p1, p2, p3, p4);
+      if (Serial.read() == '\n') {
+        Serial.println("action: " + action);
+      } else {
+        Serial.println("action FUCKED");
+      }
+      Serial.println("get");
+    }
+    // read new loop
+    else {
+      animationIsPlaying = true;
+      animation.pattern = patterns[marker];
+      animation.iterations = Serial.parseInt();
+      animation.doReverse = (bool) Serial.parseInt();
+      animation.speedStart = Serial.parseFloat();
+      animation.speedEnd = Serial.parseFloat();
+      animation.p1s = Serial.parseFloat();
+      animation.p1e = Serial.parseFloat();
+      animation.p2s = Serial.parseFloat();
+      animation.p2e = Serial.parseFloat();
+      animation.p3s = Serial.parseFloat();
+      animation.p3e = Serial.parseFloat();
+      animation.p4s = Serial.parseFloat();
+      animation.p4e = Serial.parseFloat();
+      animation.p5s = Serial.parseFloat();
+      animation.p5e = Serial.parseFloat();
 
-    if (Serial.read() == '\n') {
-      Serial.println("ya done good");
-    } else {
-      Serial.println("ya fucked up");
+      // basic sanity check
+      if (Serial.read() == '\n') {
+        Serial.println("loop good");
+      } else {
+        Serial.println("loop FUCKED");
+      }
     }
   }
   strip.clear();
@@ -91,5 +101,11 @@ void loop() {
   }
 
   strip.show();
+}
+
+void doAction(String action, int p1, int p2, int p3, int p4) {
+  if (action == "setColorMode") {
+    colorMode = p1;
+  }
 }
 
